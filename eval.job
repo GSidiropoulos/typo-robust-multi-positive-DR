@@ -1,0 +1,43 @@
+#!/bin/sh
+# The following lines instruct Slurm to allocate one GPU.
+#SBATCH -o ./%A.out
+#SBATCH -e ./%A.err
+#SBATCH --partition=cpu
+#SBATCH -c12
+#SBATCH --mem=10G
+#SBATCH --time=1:00:00
+
+# Set-up the environment.
+source ${HOME}/.bashrc
+
+# GPU
+export CUDA_HOME="/usr/local/cuda-10.2"
+export PATH="${CUDA_HOME}/bin:${PATH}"
+export LIBRARY_PATH="${CUDA_HOME}/lib64:${LIBRARY_PATH}"
+export LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
+export HYDRA_FULL_ERROR=1
+export NCCL_IB_DISABLE=1
+export WANDB_DISABLED=true
+
+# activate env
+source activate noise_dr
+export TRANSFORMERS_CACHE=/cache_models
+export HF_DATASETS_CACHE=/cache_data
+export TA_CACHE_DIR=/cache_data
+
+# echo run info
+echo "SLURM_SUBMIT_DIR="$SLURM_SUBMIT_DIR
+echo "SLURM_JOB_ID"=$SLURM_JOB_ID
+echo "SLURM_JOB_NAME"=$SLURM_JOB_NAME
+
+
+
+echo 'MS-MARCO results'
+python eval_msmarco.py --qrels_path test_data/marco_dev/qrels.dev.small.tsv --qpreds_path msmarco_rank.txt
+
+
+echo 'DL-typo results'
+echo 'The performance of original queries'
+../trec_eval/trec_eval -l 2 -m ndcg_cut.10 -m map -m recip_rank test_data/dl-typo/qrels.txt dltypo_rank.txt.trec
+echo 'The performance of misspelled queries'
+../trec_eval/trec_eval -l 2 -m ndcg_cut.10 -m map -m recip_rank test_data/dl-typo/qrels.txt dltypo_typo_rank.txt.trec

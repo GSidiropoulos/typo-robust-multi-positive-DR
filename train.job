@@ -1,0 +1,127 @@
+#!/bin/sh
+# The following lines instruct Slurm to allocate one GPU.
+#SBATCH -o ./%A.out
+#SBATCH -e ./%A.err
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:1
+#SBATCH -c12
+#SBATCH --mem=30G
+#SBATCH --time=48:00:00
+
+# Set-up the environment.
+source ${HOME}/.bashrc
+
+# GPU
+export CUDA_HOME="/usr/local/cuda-10.2"
+export PATH="${CUDA_HOME}/bin:${PATH}"
+export LIBRARY_PATH="${CUDA_HOME}/lib64:${LIBRARY_PATH}"
+export LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
+export HYDRA_FULL_ERROR=1
+export NCCL_IB_DISABLE=1
+
+# activate env
+source activate noise_dr
+export TRANSFORMERS_CACHE=/cache_models
+export HF_DATASETS_CACHE=/cache_data
+export TA_CACHE_DIR=/cache_data
+
+# echo run info
+echo "SLURM_SUBMIT_DIR="$SLURM_SUBMIT_DIR
+echo "SLURM_JOB_ID"=$SLURM_JOB_ID
+echo "SLURM_JOB_NAME"=$SLURM_JOB_NAME
+
+
+python -m tevatron_dst.driver.train \
+--model_name_or_path bert-base-uncased \
+--output_dir /model_msmarco_bert_40 \
+--passage_field_separator [SEP] \
+--save_steps 40000 \
+--dataset_name Tevatron/msmarco-passage \
+--fp16 \
+--per_device_train_batch_size 16 \
+--learning_rate 1e-5 \
+--max_steps 150000 \
+--dataloader_num_workers 10 \
+--cache_dir /cache_data \
+--logging_steps 150 \
+--query_augmentation_size 40 \
+--beta 0.5 \
+--gamma 0.5 \
+--sigma 0.2 \
+--multi_positive
+
+
+NAME="bert_40"
+LOAD_MODEL_DIR="model_msmarco_${NAME}"
+SAVE_EMBEDDING_DIR="msmarco_${NAME}_embs"
+SAVE_RANK_DIR="rank_${NAME}"
+echo "LOAD_MODEL_DIR: ${LOAD_MODEL_DIR}"
+echo "SAVE_EMBEDDING_DIR: ${SAVE_EMBEDDING_DIR}"
+echo "SAVE_RANK_DIR: ${SAVE_RANK_DIR}"
+
+
+mkdir $SAVE_EMBEDDING_DIR
+mkdir $SAVE_RANK_DIR
+
+# encode query dl-typo
+python -m tevatron_dst.driver.encode \
+  --output_dir=temp \
+  --model_name_or_path $LOAD_MODEL_DIR/checkpoint-final \
+  --fp16 \
+  --per_device_eval_batch_size 128 \
+  --encode_in_path test_data/dl-typo/query.typo.tsv \
+  --encoded_save_path $SAVE_EMBEDDING_DIR/query_dltypo_typo_emb.pkl \
+  --q_max_len 32 \
+  --encode_is_qry
+
+python -m tevatron_dst.driver.encode \
+  --output_dir=temp \
+  --model_name_or_path $LOAD_MODEL_DIR/checkpoint-final \
+  --fp16 \
+  --per_device_eval_batch_size 128 \
+  --encode_in_path test_data/dl-typo/query.tsv \
+  --encoded_save_path $SAVE_EMBEDDING_DIR/query_dltypo_emb.pkl \
+  --q_max_len 32 \
+  --encode_is_qry
+
+# encode query msmarco dev
+python -m tevatron_dst.driver.encode \
+  --output_dir=temp \
+  --model_name_or_path $LOAD_MODEL_DIR/checkpoint-final \
+  --fp16 \
+  --per_device_eval_batch_size 128 \
+  --encode_in_path test_data/marco_dev/queries.dev.small.tsv \
+  --encoded_save_path ${SAVE_EMBEDDING_DIR}/query_msmarco_emb.pkl \
+  --q_max_len 32 \
+  --encode_is_qry
+
+# encode query msmarco-typo dev
+for s in $(seq 1 10)
+do
+python -m tevatron_dst.driver.encode \
+  --output_dir=temp \
+  --model_name_or_path $LOAD_MODEL_DIR/checkpoint-final \
+  --fp16 \
+  --per_device_eval_batch_size 128 \
+  --encode_in_path test_data/marco_dev/queries.dev.small.typo${s}.tsv \
+  --encoded_save_path ${SAVE_EMBEDDING_DIR}/query_msmarco_typo${s}_emb.pkl \
+  --q_max_len 32 \
+  --encode_is_qry
+done
+
+# encode corpus
+for s in $(seq -f "%02g" 0 19)
+do
+python -m tevatron_dst.driver.encode \
+  --output_dir=temp \
+  --model_name_or_path $LOAD_MODEL_DIR/checkpoint-final \
+  --fp16 \
+  --per_device_eval_batch_size 128 \
+  --p_max_len 128 \
+  --dataset_name Tevatron/msmarco-passage-corpus \
+  --encoded_save_path ${SAVE_EMBEDDING_DIR}/corpus_emb.${s}.pkl \
+  --encode_num_shard 20 \
+  --encode_shard_index ${s} \
+  --cache_dir /cache_data \
+  --passage_field_separator [SEP]
+done

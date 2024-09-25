@@ -2,7 +2,7 @@
 This repository contains the code for the paper [Improving the Robustness of Dense Retrievers Against Typos via Multi-Positive Contrastive Learning](https://link.springer.com/chapter/10.1007/978-3-031-56063-7_21), ECIR 2024.
 
 ##
-The code is built on top of the code released for the paper [Typo-Robust Representation Learning for Dense Retrieval](https://github.com/panuthept/DST-DenseRetrieval/tree/main?tab=readme-ov-file)
+The code is built on top of the code released for the paper [Typo-Robust Representation Learning for Dense Retrieval](https://github.com/panuthept/DST-DenseRetrieval/tree/main?tab=readme-ov-file) following the [Tevatron](https://github.com/texttron/tevatron) toolkit for dense retrieval.
 
 ## Installation
 Use ```setup.sh``` script to install this repository and Python dependency packages:
@@ -37,3 +37,17 @@ Evaluate the retrieval results, using the following command:
 ```
 sbatch eval.job
 ```
+
+
+## Citation
+If you find this work helpful or use it in your own work, please cite our paper. 
+```
+
+@inproceedings{sidiropoulos2024improving,
+  title={Improving the Robustness of Dense Retrievers Against Typos via Multi-Positive Contrastive Learning},
+  author={Sidiropoulos, Georgios and Kanoulas, Evangelos},
+  booktitle={European Conference on Information Retrieval},
+  pages={297--305},
+  year={2024},
+  organization={Springer}
+}

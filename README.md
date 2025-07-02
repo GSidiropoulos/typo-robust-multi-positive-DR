@@ -51,3 +51,7 @@ If you find this work helpful or use it in your own work, please cite our paper.
   year={2024},
   organization={Springer}
 }
+```
+
+## Questions
+If you have any questions, please contact [Georgios Sidiropoulos](mailto:gn.sidiro@yahoo.com).
